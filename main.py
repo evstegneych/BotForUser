@@ -4,7 +4,6 @@ import re
 import random
 import datetime
 from vk_api.longpoll import VkLongPoll, VkEventType
-from config import config
 
 Token = ""
 
