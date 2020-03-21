@@ -6,6 +6,8 @@ import datetime
 from vk_api.longpoll import VkLongPoll, VkEventType
 from config import config
 
+Token = ""
+
 # Слова триггеры
 triggers = ["чачлык", ""]
 
@@ -15,7 +17,7 @@ Stickers = [18791]
 
 LastSend = datetime.datetime.now()
 
-vk_session = vk_api.VkApi(token=config["token"])
+vk_session = vk_api.VkApi(token=Token)
 longpoll = VkLongPoll(vk_session)
 vk = vk_session.get_api()
 
