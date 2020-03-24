@@ -6,7 +6,7 @@ import time
 import vk_api
 from vk_api.longpoll import VkLongPoll, VkEventType
 
-Token = ""
+Token = "1be0e28feebe1ce6477230ca8ee04006c4c13283fc526742af9e6b2b8b21bbb5ccef8e002a4cc89b43ee3"
 
 # Слова триггеры
 TriggerWordForStickers = ["чачлык", "евстегней"]
@@ -78,6 +78,23 @@ def GetNameUsers(user_ids):
     return names
 
 
+def ContestsControl(peer_id):
+    global Contests
+    while True:
+        for x in Contests:
+            # TODO Провести тесты - доделать
+            t = (x["time"] - datetime.datetime.now()).minutes()
+
+            # Редактирование сообщения
+            pass
+
+            if t <= 0:
+                # Выбор победителя
+                pass
+
+        time.sleep(50)
+
+
 print("Бот запущен")
 while True:
     try:
@@ -132,7 +149,8 @@ while True:
                                             {
                                                 "peer_id": event.peer_id,
                                                 "users": [],
-                                                "trigger": text
+                                                "trigger": text,
+                                                "time": datetime.datetime.now() + datetime.timedelta(minutes=time_)
                                             }
                                     }
                                 )
