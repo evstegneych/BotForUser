@@ -21,7 +21,7 @@ TimeWait = 5
 TriggerWordForDelete = "ой"
 
 # Триггер слово для транслита клавиатуры
-TriggerWordForTranslate = "перевод"
+TriggerWordForTranslate = "рас"
 
 TriggerWordForEveryone = [
     # Триггер слово для @everyone
@@ -39,45 +39,54 @@ user_id = vk.users.get()[0]["id"]
 LastSend = datetime.datetime.now()
 LastMyMessage = {}
 
+
+def CheckMarkUser(message):
+    finder = re.search(r"\[id" + str(user_id) + r"\|(?:|@).{2,15}\]", message)
+    if finder is not None:
+        return True
+    finder = re.search(r"\s?(" + str("|".join(TriggerWordForStickers)) + r")\s?", message)
+    if finder is not None:
+        return True
+    return False
+
+
 while True:
     try:
         for event in longpoll.listen():
             try:
                 if event.type == VkEventType.MESSAGE_NEW:
-
-                    message = event.text.lower()
-                    for x in TriggerWordForStickers:
-                        find = re.search(r"(\[id" + str(user_id) + r"\|(?:|@).{2,15}\])|(\s?" + str(x) + r"\s?)",
-                                         message.lower())
-                        if find is not None and LastSend is not None:
-                            if datetime.datetime.now() >= LastSend:
-                                try:
-                                    time.sleep(.3)
-                                    vk.messages.send(peer_id=event.peer_id, sticker_id=random.choice(Stickers),
-                                                     random_id=random.randint(-1000000, 1000000))
-                                except Exception as s:
-                                    print(s)
-                                finally:
-                                    LastSend = datetime.datetime.now() + datetime.timedelta(minutes=TimeWait)
-                            else:
-                                print("Осталось", LastSend - datetime.datetime.now())
-                            break
+                    if not event.text:
+                        continue
+                    message = event.message.lower()
+                    find = CheckMarkUser(message)
+                    if find and LastSend is not None:
+                        if datetime.datetime.now() >= LastSend:
+                            try:
+                                time.sleep(.3)
+                                vk.messages.send(peer_id=event.peer_id, sticker_id=random.choice(Stickers),
+                                                 random_id=random.randint(-1000000, 1000000))
+                            except Exception as s:
+                                print(s)
+                            finally:
+                                LastSend = datetime.datetime.now() + datetime.timedelta(minutes=TimeWait)
+                        else:
+                            print("Осталось", LastSend - datetime.datetime.now())
 
                     if event.from_chat and event.user_id == user_id:
 
                         if message.startswith(TriggerWordForDelete):
-                            message = message.replace(TriggerWordForDelete, '')
+                            message_ = message.replace(TriggerWordForDelete, '')
 
-                            if len(message) is 0:
-                                message = str(abs(len(message) + 1))
-                            if message.isdigit():
+                            if len(message_) is 0:
+                                message_ = str(abs(len(message_) + 1))
+                            if message_.isdigit():
                                 try:
                                     response = vk.messages.getHistory(peer_id=event.peer_id)
                                 except Exception as s:
                                     print(s)
                                     continue
                                 count = 0
-                                count_max = int(message) + 1
+                                count_max = int(message_) + 1
                                 to_del = []
                                 for x in response.get('items', []):
                                     if x['from_id'] == user_id:
@@ -105,22 +114,32 @@ while True:
                             continue
 
                         elif message == TriggerWordForTranslate:
-                            eng_chars = "~!@#$%^&qwertyuiop[]asdfghjkl;'zxcvbnm,./QWERTYUIOP{}ASDFGHJKL:\"|ZXCVBNM<>?"
-                            rus_chars = "ё!\"№;%:?йцукенгшщзхъфывапролджэячсмитьбю.ЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭ/ЯЧСМИТЬБЮ,"
-                            trans_table = dict(zip(eng_chars + rus_chars, rus_chars + eng_chars))
-                            swapped_message = ""
-                            for c in event.text:
-                                try:
-                                    swapped_message += trans_table.get(c, c)
-                                except Exception as s:
-                                    print(s)
-                            print(swapped_message)
+                            message_ = LastMyMessage.get(event.peer_id)
+                            if message_ is not None:
+                                response = vk.messages.getById(message_ids=message_)
+                                msg = response.get("items", [{}])[0].get("text")
+                                if msg is not None:
+                                    eng_chars = "~!@#$%^&qwertyuiop[]asdfghjkl;'zxcvbnm,./QWERTYUIOP{}ASDFGHJKL:\"|ZXCVBNM<>?"
+                                    rus_chars = "ё!\"№;%:?йцукенгшщзхъфывапролджэячсмитьбю.ЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭ/ЯЧСМИТЬБЮ,"
+                                    trans_table = dict(zip(eng_chars + rus_chars, rus_chars + eng_chars))
+                                    swapped_message = ""
+                                    for c in msg:
+                                        try:
+                                            swapped_message += trans_table.get(c, c)
+                                        except Exception as s:
+                                            print(s)
+                                    try:
+                                        vk.messages.edit(peer_id=event.peer_id, message=swapped_message,
+                                                         message_id=message_)
+                                        vk.messages.delete(message_ids=event.message_id, delete_for_all=1)
+                                    except Exception as s:
+                                        print(s)
 
                         else:
                             LastMyMessage.update({event.peer_id: event.message_id})
-            
+
             except Exception as s:
-                print(event.message)
+                print(s)
                 print(event.raw)
 
     except Exception as s:
