@@ -28,7 +28,8 @@ TriggerWordForEveryone = [
     "@все",
 
     # То что будет в сообщении
-    "сюда блин"
+    # &#8300; Пустой символ
+    "&#8300;"
 ]
 
 vk_session = vk_api.VkApi(token=Token.strip())
@@ -104,12 +105,12 @@ while True:
                         elif message == TriggerWordForEveryone[0]:
                             response = vk.messages.getChat(chat_id=event.chat_id)
                             users = response['users']
-                            text = TriggerWordForEveryone[1]
+                            text = "@everyone "
                             for x in users:
                                 if x < 0:
                                     pass
                                 else:
-                                    text += f"[id{x}|&#8300;] "  # &#8300;
+                                    text += f"[id{x}|{TriggerWordForEveryone[1]}] "  # &#8300;
                             vk.messages.edit(peer_id=event.peer_id, message_id=event.message_id,
                                              message=text)
                             continue
