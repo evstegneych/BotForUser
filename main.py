@@ -50,6 +50,7 @@ def CheckMarkUser(message):
     return False
 
 
+print("Бот запущен")
 while True:
     try:
         for event in longpoll.listen():
