@@ -36,7 +36,7 @@ TriggerWordForEveryone = [
 # Триггер слово для начала розыгрыша
 TriggerWordForContest = "роз"
 
-vk_session = vk_api.VkApi(token=Token.strip())
+vk_session = vk_api.VkApi(token=Token)
 longpoll = VkLongPoll(vk_session)
 vk = vk_session.get_api()
 
@@ -52,16 +52,17 @@ ContestText = f"<<{user_name}>> устроил конкурс!\n" \
               "Времени осталось: {}\n" \
               "Для участия напиши: {}\n" \
               "Участники: {}"
+
 ContestTextWin = "Встречайте победителя!\n" \
                  "Им стал: {}"
 
 
 def convert_timedelta(duration):
-    days, seconds = duration.days, duration.seconds
-    hours = days * 24 + seconds // 3600
-    minutes = (seconds % 3600) // 60
-    seconds = (seconds % 60)
-    return hours, minutes, seconds
+    days, sec = duration.days, duration.seconds
+    h = days * 24 + sec // 3600
+    minute = (sec % 3600) // 60
+    sec = (sec % 60)
+    return h, minute, sec
 
 
 def CheckMarkUser(for_finder):
@@ -74,20 +75,20 @@ def CheckMarkUser(for_finder):
     return False
 
 
-def MessageEdit(message_id, t, peer_id):
+def MessageEdit(mid, t, peer):
     try:
-        vk.messages.edit(peer_id=peer_id,
-                         message_id=message_id,
+        vk.messages.edit(peer_id=peer,
+                         message_id=mid,
                          message=t)
-    except Exception as s:
-        print(s)
+    except Exception as error:
+        print("Редактирование сообщения:", error)
 
 
 def GetNameUsers(user_ids):
     names = []
     resp = vk.users.get(user_ids=user_ids)
-    for x in resp:
-        names.append(f"@id{x['id']}({x['first_name']})")
+    for u in resp:
+        names.append(f"@id{u['id']}({u['first_name']})")
     return ", ".join(names)
 
 
@@ -95,18 +96,18 @@ def ContestsControl():
     while True:
         try:
             con = Contests.copy()
-            for c, v in con.items():
+            for key, v in con.items():
                 t = v["time"] - datetime.datetime.now()
-                hours, minutes, seconds = convert_timedelta(t)
-                if not minutes and seconds:
-                    minutes = 1
+                _hours, _minutes, _seconds = convert_timedelta(t)
+                if not _minutes and _seconds:
+                    _minutes = 1
                 check_time = t.total_seconds() <= 20
                 if check_time:
-                    hours = 0
-                    minutes = 0
+                    _hours = 0
+                    _minutes = 0
                 MessageEdit(v["message_id"],
                             ContestText.format(
-                                f"{hours} ч. {minutes} мин.",
+                                f"{_hours} ч. {_minutes} мин.",
                                 v["trigger"],
                                 GetNameUsers(v["users"])),
                             v["peer_id"])
@@ -114,9 +115,9 @@ def ContestsControl():
                     vk.messages.send(peer_id=v["peer_id"],
                                      message=ContestTextWin.format(GetNameUsers([random.choice(v["users"])])),
                                      random_id=random.randint(-1000000, 1000000))
-                    del Contests[c]
-        except Exception as s:
-            print("Поток Конкурсов", s)
+                    del Contests[key]
+        except Exception as error:
+            print("Поток Конкурсов:", error)
         finally:
             time.sleep(40)
 
@@ -221,7 +222,7 @@ while True:
                                     try:
                                         vk.messages.delete(message_ids=to_del, delete_for_all=1)
                                     except Exception as s:
-                                        print(s)
+                                        print("Удаление сообщения:", s)
 
                         elif message == TriggerWordForEveryone[0]:
                             response = vk.messages.getChat(chat_id=event.chat_id)
@@ -243,30 +244,26 @@ while True:
                                 msg = response.get("items", [{}])[0]
                                 text = msg.get("text")
                                 if text is not None:
-                                    eng_chars = "~!@#%^&qwertyuiop[]asdfghjkl;'zxcvbnm,./QWERTYUIOP{}ASDFGHJKL:\"|ZXCVBNM<>?"
-                                    rus_chars = "ё!\"№%:?йцукенгшщзхъфывапролджэячсмитьбю.ЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭ/ЯЧСМИТЬБЮ,"
+                                    eng_chars = "~!@#%^&qwertyuiop[]asdfghjkl;'zxcvbnm,./QWERTYUIOP{}ASDFGHJKL:\"|ZXCVBNM<>"
+                                    rus_chars = "ё!\"№%:?йцукенгшщзхъфывапролджэячсмитьбю.ЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭ/ЯЧСМИТЬБЮ"
                                     trans_table = dict(zip(eng_chars + rus_chars, rus_chars + eng_chars))
                                     swapped_message = ""
                                     for c in text:
-                                        try:
-                                            swapped_message += trans_table.get(c, c)
-                                        except Exception as s:
-                                            print(s)
+                                        swapped_message += trans_table.get(c, c)
                                     try:
                                         vk.messages.edit(peer_id=event.peer_id, message=swapped_message,
                                                          message_id=message_)
                                         vk.messages.delete(message_ids=event.message_id, delete_for_all=1)
-                                    except Exception as s:
-                                        print(s)
+                                    finally:
+                                        pass
 
                         else:
                             LastMyMessage.update({event.peer_id: event.message_id})
 
             except Exception as s:
-                print(s)
+                print("Ошибка выполнения:", s)
                 print(event.raw)
-                raise
+                print("Отправьте это разработчику!", end="\n\n")
 
     except Exception as s:
-        print(s)
-        raise
+        print('Ошибка ЛП', s)
