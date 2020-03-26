@@ -2,11 +2,12 @@ import datetime
 import random
 import re
 import time
+from threading import Thread
 
 import vk_api
 from vk_api.longpoll import VkLongPoll, VkEventType
 
-Token = "1be0e28feebe1ce6477230ca8ee04006c4c13283fc526742af9e6b2b8b21bbb5ccef8e002a4cc89b43ee3"
+Token = ""
 
 # Слова триггеры
 TriggerWordForStickers = ["чачлык", "евстегней"]
@@ -35,20 +36,32 @@ TriggerWordForEveryone = [
 # Триггер слово для начала розыгрыша
 TriggerWordForContest = "роз"
 
-# Не изменять! Возможны критические ошибки!
-ContestText = "Розыгрыш!\n" \
-              "Времени осталось: {} мин.\n" \
-              "Для участия напиши: {}" \
-              "Учасники: {}"
-
 vk_session = vk_api.VkApi(token=Token.strip())
 longpoll = VkLongPoll(vk_session)
 vk = vk_session.get_api()
 
-user_id = vk.users.get()[0]["id"]
+user_info = vk.users.get()[0]
+user_id = user_info["id"]
+user_name = f"{user_info['first_name']} {user_info['last_name']}"
 LastSend = datetime.datetime.now()
 LastMyMessage = {}
 Contests = {}
+
+# Не изменять! Возможны критические ошибки!
+ContestText = f"<<{user_name}>> устроил конкурс!\n" \
+              "Времени осталось: {}\n" \
+              "Для участия напиши: {}\n" \
+              "Участники: {}"
+ContestTextWin = "Встречайте победителя!\n" \
+                 "Им стал: {}"
+
+
+def convert_timedelta(duration):
+    days, seconds = duration.days, duration.seconds
+    hours = days * 24 + seconds // 3600
+    minutes = (seconds % 3600) // 60
+    seconds = (seconds % 60)
+    return hours, minutes, seconds
 
 
 def CheckMarkUser(for_finder):
@@ -74,27 +87,41 @@ def GetNameUsers(user_ids):
     names = []
     resp = vk.users.get(user_ids=user_ids)
     for x in resp:
-        names.append(f"@id{x['id']}({x['first_name']} {x['last_name']})")
-    return names
+        names.append(f"@id{x['id']}({x['first_name']})")
+    return ", ".join(names)
 
 
-def ContestsControl(peer_id):
-    global Contests
+def ContestsControl():
     while True:
-        for x in Contests:
-            # TODO Провести тесты - доделать
-            t = (x["time"] - datetime.datetime.now()).minutes()
+        try:
+            con = Contests.copy()
+            for c, v in con.items():
+                t = v["time"] - datetime.datetime.now()
+                hours, minutes, seconds = convert_timedelta(t)
+                if not minutes and seconds:
+                    minutes = 1
+                check_time = t.total_seconds() <= 20
+                if check_time:
+                    hours = 0
+                    minutes = 0
+                MessageEdit(v["message_id"],
+                            ContestText.format(
+                                f"{hours} ч. {minutes} мин.",
+                                v["trigger"],
+                                GetNameUsers(v["users"])),
+                            v["peer_id"])
+                if check_time:
+                    vk.messages.send(peer_id=v["peer_id"],
+                                     message=ContestTextWin.format(GetNameUsers([random.choice(v["users"])])),
+                                     random_id=random.randint(-1000000, 1000000))
+                    del Contests[c]
+        except Exception as s:
+            print("Поток Конкурсов", s)
+        finally:
+            time.sleep(40)
 
-            # Редактирование сообщения
-            pass
 
-            if t <= 0:
-                # Выбор победителя
-                pass
-
-        time.sleep(50)
-
-
+Thread(target=ContestsControl, args=[], daemon=True).start()
 print("Бот запущен")
 while True:
     try:
@@ -106,21 +133,23 @@ while True:
                     message = event.message.lower()
 
                     contest = None
-                    for con in Contests:
-                        if event.text == con["trigger"]:
-                            contest = con
+                    for (peer_id, value) in Contests.items():
+                        if event.text == value["trigger"] and value["peer_id"] == event.peer_id:
+                            contest = value
                             break
                     if contest is not None:
                         if event.user_id not in contest["users"]:
-                            contest["users"].append(event.user_id)
-
+                            Contests[contest["peer_id"]]["users"].append(event.user_id)
+                            hours, minutes, seconds = convert_timedelta(contest["time"] - datetime.datetime.now())
                             MessageEdit(contest["message_id"],
-                                        ContestText.format(contest["time"], contest["trigger"],
-                                                           GetNameUsers(contest["users"])),
+                                        ContestText.format(
+                                            f"{hours} ч. {minutes} мин.",
+                                            contest["trigger"],
+                                            GetNameUsers(contest["users"])),
                                         contest["peer_id"])
 
                     find = CheckMarkUser(message)
-                    if find and LastSend is not None:
+                    if find and LastSend is not None and event.user_id != user_id:
                         if datetime.datetime.now() >= LastSend:
                             try:
                                 time.sleep(.3)
@@ -136,21 +165,32 @@ while True:
                     if event.from_chat and event.user_id == user_id:
 
                         if message.startswith(TriggerWordForContest + " "):
-                            message_ = message[len(TriggerWordForContest) + 1:]
+                            if Contests.get(event.peer_id) is not None:
+                                continue
+                            message_ = event.text[len(TriggerWordForContest) + 1:]
                             args = message_.split()
                             if len(args) >= 2:
                                 time_ = args[0]
                                 if not time_.isdigit():
                                     continue
-                                text = args[1:]
+                                time_ = datetime.timedelta(minutes=int(time_))
+                                hours, minutes, seconds = convert_timedelta(time_)
+                                trigger = args[1:]
+                                text = ContestText.format(f"{hours} ч. {minutes} мин.",
+                                                          " ".join(trigger), "")
+                                message_id = vk.messages.send(peer_id=event.peer_id,
+                                                              message=text,
+                                                              random_id=random.randint(-1000000, 1000000))
+                                vk.messages.delete(message_ids=event.message_id, delete_for_all=1)
                                 Contests.update(
                                     {
                                         event.peer_id:
                                             {
                                                 "peer_id": event.peer_id,
                                                 "users": [],
-                                                "trigger": text,
-                                                "time": datetime.datetime.now() + datetime.timedelta(minutes=time_)
+                                                "message_id": message_id,
+                                                "trigger": " ".join(trigger),
+                                                "time": datetime.datetime.now() + time_
                                             }
                                     }
                                 )
@@ -182,7 +222,6 @@ while True:
                                         vk.messages.delete(message_ids=to_del, delete_for_all=1)
                                     except Exception as s:
                                         print(s)
-                            del message_, response, count, count_max, to_del
 
                         elif message == TriggerWordForEveryone[0]:
                             response = vk.messages.getChat(chat_id=event.chat_id)
@@ -195,7 +234,6 @@ while True:
                                     text += f"[id{x}|{TriggerWordForEveryone[1]}] "  # &#8300;
                             vk.messages.edit(peer_id=event.peer_id, message_id=event.message_id,
                                              message=text)
-                            del text, users, response
                             continue
 
                         elif message == TriggerWordForTranslate:
@@ -220,7 +258,6 @@ while True:
                                         vk.messages.delete(message_ids=event.message_id, delete_for_all=1)
                                     except Exception as s:
                                         print(s)
-                            del message_
 
                         else:
                             LastMyMessage.update({event.peer_id: event.message_id})
@@ -228,6 +265,8 @@ while True:
             except Exception as s:
                 print(s)
                 print(event.raw)
+                raise
 
     except Exception as s:
         print(s)
+        raise
