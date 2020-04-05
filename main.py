@@ -1,4 +1,5 @@
 import datetime
+import json
 import random
 import re
 import time
@@ -7,36 +8,41 @@ from threading import Thread
 import vk_api
 from vk_api.longpoll import VkLongPoll, VkEventType
 
-Token = ""
 
-# Слова триггеры
-TriggerWordForStickers = ["чачлык", "евстегней"]
+class Settings:
+    __slots__ = ["Token", "TriggerStickers", "Stickers",
+                 "TimeWait", "TriggerDelete",
+                 "TriggerTranslate", "TriggerEveryone",
+                 "TriggerContest", "filename", "_data"]
 
-# Стикеры...
-Stickers = [18791, 14234, 14213, 13849]
+    def __init__(self, filename):
+        self.filename = filename
+        self._data = None
 
-# Время в минутах ожидания след. срабатывания
-TimeWait = 5
+    def load(self, ):
+        with open(self.filename, "r", encoding="utf-8") as file:
+            self._data = json.load(file)
+            for (k, v) in self._data.items():
+                setattr(self, k, v)
 
-# Триггер слово для ой-бота
-TriggerWordForDelete = "ой"
+    def save(self):
+        if self._data is not None:
+            with open(self.filename, "w", encoding="utf-8") as file:
+                json.dump(self._data, file, ensure_ascii=False, indent=4)
 
-# Триггер слово для транслита клавиатуры
-TriggerWordForTranslate = "рас"
+    def edit(self, _name, _value):
+        self._data[_name] = _value
+        setattr(self, _name, _value)
 
-TriggerWordForEveryone = [
-    # Триггер слово для @everyone
-    "@все",
+    @property
+    def get_data(self):
+        return str(self._data)
 
-    # То что будет в сообщении
-    # &#8300; Пустой символ
-    "&#8300;"
-]
 
-# Триггер слово для начала розыгрыша
-TriggerWordForContest = "роз"
+setting = Settings("config.json")
+setting.load()
 
-vk_session = vk_api.VkApi(token=Token)
+vk_session = vk_api.VkApi(token=setting.Token)
 longpoll = VkLongPoll(vk_session)
 vk = vk_session.get_api()
 
@@ -66,7 +72,7 @@ def convert_timedelta(duration):
 
 
 def CheckMarkUser(for_finder):
-    finder = re.search(r"\s?(" + str("|".join(TriggerWordForStickers)) + r")\s?", for_finder)
+    finder = re.search(r"\s?(" + str("|".join(setting.TriggerStickers)) + r")\s?", for_finder)
     if finder is not None:
         return True
     finder = re.search(r"\[id" + str(user_id) + r"\|(?:|@).{2,15}\]", for_finder)
@@ -135,7 +141,7 @@ while True:
 
                     contest = None
                     for (peer_id, value) in Contests.items():
-                        if event.text == value["trigger"] and value["peer_id"] == event.peer_id:
+                        if message == value["trigger"].lower() and value["peer_id"] == event.peer_id:
                             contest = value
                             break
                     if contest is not None:
@@ -154,21 +160,21 @@ while True:
                         if datetime.datetime.now() >= LastSend:
                             try:
                                 time.sleep(.3)
-                                vk.messages.send(peer_id=event.peer_id, sticker_id=random.choice(Stickers),
+                                vk.messages.send(peer_id=event.peer_id, sticker_id=random.choice(setting.Stickers),
                                                  random_id=random.randint(-1000000, 1000000))
                             except Exception as s:
                                 print(s)
                             finally:
-                                LastSend = datetime.datetime.now() + datetime.timedelta(minutes=TimeWait)
+                                LastSend = datetime.datetime.now() + datetime.timedelta(minutes=setting.TimeWait)
                         else:
                             print("Осталось", LastSend - datetime.datetime.now())
 
                     if event.from_chat and event.user_id == user_id:
 
-                        if message.startswith(TriggerWordForContest + " "):
+                        if message.startswith(setting.TriggerContest + " "):
                             if Contests.get(event.peer_id) is not None:
                                 continue
-                            message_ = event.text[len(TriggerWordForContest) + 1:]
+                            message_ = event.text[len(setting.TriggerContest) + 1:]
                             args = message_.split()
                             if len(args) >= 2:
                                 time_ = args[0]
@@ -198,8 +204,8 @@ while True:
 
                             del message_, args
 
-                        if message.startswith(TriggerWordForDelete):
-                            message_ = message.replace(TriggerWordForDelete, '')
+                        elif message.startswith(setting.TriggerDelete):
+                            message_ = message.replace(setting.TriggerDelete, '')
 
                             if len(message_) is 0:
                                 message_ = str(abs(len(message_) + 1))
@@ -224,7 +230,7 @@ while True:
                                     except Exception as s:
                                         print("Удаление сообщения:", s)
 
-                        elif message == TriggerWordForEveryone[0]:
+                        elif message == setting.TriggerEveryone[0]:
                             response = vk.messages.getChat(chat_id=event.chat_id)
                             users = response['users']
                             text = "@everyone "
@@ -232,20 +238,20 @@ while True:
                                 if x < 0:
                                     pass
                                 else:
-                                    text += f"[id{x}|{TriggerWordForEveryone[1]}] "  # &#8300;
+                                    text += f"[id{x}|{setting.TriggerEveryone[1]}] "  # &#8300;
                             vk.messages.edit(peer_id=event.peer_id, message_id=event.message_id,
                                              message=text)
                             continue
 
-                        elif message == TriggerWordForTranslate:
+                        elif message == setting.TriggerTranslate:
                             message_ = LastMyMessage.get(event.peer_id)
                             if message_ is not None:
                                 response = vk.messages.getById(message_ids=message_)
                                 msg = response.get("items", [{}])[0]
                                 text = msg.get("text")
                                 if text is not None:
-                                    eng_chars = "~!@#%^&qwertyuiop[]asdfghjkl;'zxcvbnm,./QWERTYUIOP{}ASDFGHJKL:\"|ZXCVBNM<>"
-                                    rus_chars = "ё!\"№%:?йцукенгшщзхъфывапролджэячсмитьбю.ЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭ/ЯЧСМИТЬБЮ"
+                                    eng_chars = "~!@#%^&qwertyuiop[]asdfghjkl;'zxcvbnm,.QWERTYUIOP{}ASDFGHJKL:\"|ZXCVBNM<>"
+                                    rus_chars = "ё!\"№%:?йцукенгшщзхъфывапролджэячсмитьбюЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭ/ЯЧСМИТЬБЮ"
                                     trans_table = dict(zip(eng_chars + rus_chars, rus_chars + eng_chars))
                                     swapped_message = ""
                                     for c in text:
@@ -258,7 +264,8 @@ while True:
                                         pass
 
                         else:
-                            LastMyMessage.update({event.peer_id: event.message_id})
+                            if event.text != "":
+                                LastMyMessage.update({event.peer_id: event.message_id})
 
             except Exception as s:
                 print("Ошибка выполнения:", s)

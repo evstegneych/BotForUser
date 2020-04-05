@@ -1,0 +1,23 @@
+{
+  "Token": "",
+  "TriggerStickers": [
+    "чачлык",
+    "евстегней"
+  ],
+  "Stickers": [
+    18791,
+    14234,
+    14213,
+    13849
+  ],
+  "TimeWait": 5,
+  "TriggerDelete": "ой",
+  "TriggerTranslate": "рас",
+  "TriggerEveryone": [
+    "@все",
+    "&#8300;"
+  ],
+  "TriggerWordForContest": "роз",
+  "Trigger": "!+",
+  "TriggerWord": "!-"
+}
