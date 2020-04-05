@@ -8,8 +8,10 @@
     18791,
     14234,
     14213,
-    13849
+    13849,
+    13871
   ],
+  "TriggerAddStickers": "!+",
   "TimeWait": 5,
   "TriggerDelete": "ой",
   "TriggerTranslate": "рас",
@@ -17,7 +19,5 @@
     "@все",
     "&#8300;"
   ],
-  "TriggerWordForContest": "роз",
-  "Trigger": "!+",
-  "TriggerWord": "!-"
+  "TriggerContest": "роз"
 }

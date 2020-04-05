@@ -13,7 +13,8 @@ class Settings:
     __slots__ = ["Token", "TriggerStickers", "Stickers",
                  "TimeWait", "TriggerDelete",
                  "TriggerTranslate", "TriggerEveryone",
-                 "TriggerContest", "filename", "_data"]
+                 "TriggerContest", "TriggerAddStickers",
+                 "filename", "_data"]
 
     def __init__(self, filename):
         self.filename = filename
@@ -33,6 +34,10 @@ class Settings:
     def edit(self, _name, _value):
         self._data[_name] = _value
         setattr(self, _name, _value)
+
+    def update(self):
+        for k in self.__slots__[:-2]:
+            self._data[k] = getattr(self, k)
 
     @property
     def get_data(self):
@@ -82,12 +87,9 @@ def CheckMarkUser(for_finder):
 
 
 def MessageEdit(mid, t, peer):
-    try:
-        vk.messages.edit(peer_id=peer,
-                         message_id=mid,
-                         message=t)
-    except Exception as error:
-        print("Редактирование сообщения:", error)
+    vk.messages.edit(peer_id=peer,
+                     message_id=mid,
+                     message=t)
 
 
 def GetNameUsers(user_ids):
@@ -262,15 +264,46 @@ while True:
                                         vk.messages.delete(message_ids=event.message_id, delete_for_all=1)
                                     finally:
                                         pass
+                        elif message.startswith(setting.TriggerAddStickers):
+                            sticker_id = None
+                            response = vk.messages.getById(message_ids=event.message_id)["items"]
+                            if response:
+                                response = response[0]
+                                get_sticker = response.get("reply_message")
+                                if get_sticker is None:
+                                    get_sticker = response.get("reply_message")
+                                if get_sticker is not None:
+                                    attach = get_sticker.get("attachments")[0]
+                                    attach = attach.get("sticker")
+                                    if attach is not None:
+                                        sticker_id = attach["sticker_id"]
+
+                            if sticker_id is not None:
+                                if sticker_id in setting.Stickers:
+                                    setting.Stickers.remove(sticker_id)
+                                    MessageEdit(event.message_id, f"Стикер <<{sticker_id}>> удален.", event.peer_id)
+                                else:
+                                    setting.Stickers.append(sticker_id)
+                                    MessageEdit(event.message_id, f"Стикер <<{sticker_id}>> добавлен.", event.peer_id)
+                                setting.update()
+                                setting.save()
+                                continue
+
+                            args: str = message.strip()
+                            if args.isdigit():
+                                pass
+
 
                         else:
                             if event.text != "":
                                 LastMyMessage.update({event.peer_id: event.message_id})
 
             except Exception as s:
+                print("-----------------")
                 print("Ошибка выполнения:", s)
                 print(event.raw)
-                print("Отправьте это разработчику!", end="\n\n")
+                print("Отправьте это разработчику!")
+                print("-----------------")
 
     except Exception as s:
-        print('Ошибка ЛП', s)
+        print('Ошибка ЛП: ', s)
