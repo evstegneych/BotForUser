@@ -14,7 +14,8 @@ class Settings:
                  "TimeWait", "TriggerDelete",
                  "TriggerTranslate", "TriggerEveryone",
                  "TriggerContest", "TriggerAddStickers",
-                 "filename", "_data"]
+                 "TriggerIgnore", "IgnoreList",
+                 "TimeOutDel", "filename", "_data"]
 
     def __init__(self, filename):
         self.filename = filename
@@ -92,12 +93,31 @@ def MessageEdit(mid, t, peer):
                      message=t)
 
 
+def MessageDelete(mid, delete_for_all=1):
+    vk.messages.delete(message_ids=mid,
+                       delete_for_all=delete_for_all)
+
+
 def GetNameUsers(user_ids):
     names = []
     resp = vk.users.get(user_ids=user_ids)
     for u in resp:
         names.append(f"@id{u['id']}({u['first_name']})")
     return ", ".join(names)
+
+
+def run(target, arg=None, timeout=None):
+    if arg is None:
+        arg = []
+    Thread(target=void, args=[target, arg, timeout], daemon=True).start()
+
+
+def void(target, arg=None, timeout=None):
+    if timeout is not None:
+        time.sleep(timeout)
+    if arg is None:
+        arg = []
+    target(*arg)
 
 
 def ContestsControl():
@@ -130,7 +150,7 @@ def ContestsControl():
             time.sleep(40)
 
 
-Thread(target=ContestsControl, args=[], daemon=True).start()
+run(ContestsControl)
 print("Бот запущен")
 while True:
     try:
@@ -158,7 +178,13 @@ while True:
                                         contest["peer_id"])
 
                     find = CheckMarkUser(message)
-                    if find and LastSend is not None and event.user_id != user_id:
+                    if (
+                            find
+                            and LastSend is not None
+                            and event.user_id != user_id
+                            and event.peer_id not in setting.IgnoreList
+                    ):
+
                         if datetime.datetime.now() >= LastSend:
                             try:
                                 time.sleep(.3)
@@ -190,7 +216,7 @@ while True:
                                 message_id = vk.messages.send(peer_id=event.peer_id,
                                                               message=text,
                                                               random_id=random.randint(-1000000, 1000000))
-                                vk.messages.delete(message_ids=event.message_id, delete_for_all=1)
+                                MessageDelete(event.message_id)
                                 Contests.update(
                                     {
                                         event.peer_id:
@@ -228,7 +254,7 @@ while True:
                                         break
                                 if len(to_del) != 0:
                                     try:
-                                        vk.messages.delete(message_ids=to_del, delete_for_all=1)
+                                        MessageDelete(to_del)
                                     except Exception as s:
                                         print("Удаление сообщения:", s)
 
@@ -261,7 +287,7 @@ while True:
                                     try:
                                         vk.messages.edit(peer_id=event.peer_id, message=swapped_message,
                                                          message_id=message_)
-                                        vk.messages.delete(message_ids=event.message_id, delete_for_all=1)
+                                        MessageDelete(event.message_id)
                                     finally:
                                         pass
                         elif message.startswith(setting.TriggerAddStickers):
@@ -273,10 +299,11 @@ while True:
                                 if get_sticker is None:
                                     get_sticker = response.get("reply_message")
                                 if get_sticker is not None:
-                                    attach = get_sticker.get("attachments")[0]
-                                    attach = attach.get("sticker")
-                                    if attach is not None:
-                                        sticker_id = attach["sticker_id"]
+                                    attach = get_sticker.get("attachments")
+                                    if attach:
+                                        attach = attach[0].get("sticker")
+                                        if attach is not None:
+                                            sticker_id = attach["sticker_id"]
 
                             if sticker_id is not None:
                                 if sticker_id in setting.Stickers:
@@ -285,14 +312,29 @@ while True:
                                 else:
                                     setting.Stickers.append(sticker_id)
                                     MessageEdit(event.message_id, f"Стикер <<{sticker_id}>> добавлен.", event.peer_id)
+                                run(MessageDelete, arg=[event.message_id], timeout=setting.TimeOutDel)
                                 setting.update()
                                 setting.save()
                                 continue
 
                             args: str = message.strip()
                             if args.isdigit():
+                                # TODO Добавление стикера не через пересланное сообщение
                                 pass
-
+                        elif message == setting.TriggerIgnore:
+                            dialog_id = event.peer_id
+                            if dialog_id in setting.IgnoreList:
+                                setting.IgnoreList.remove(dialog_id)
+                                MessageEdit(event.message_id, f"Диалог <<{dialog_id}>> удален из игнор листа.",
+                                            dialog_id)
+                            else:
+                                setting.IgnoreList.append(event.peer_id)
+                                MessageEdit(event.message_id, f"Диалог <<{dialog_id}>> добавлен в игнор лист.",
+                                            dialog_id)
+                            run(MessageDelete, arg=[event.message_id], timeout=setting.TimeOutDel)
+                            setting.update()
+                            setting.save()
+                            continue
 
                         else:
                             if event.text != "":
@@ -306,4 +348,4 @@ while True:
                 print("-----------------")
 
     except Exception as s:
-        print('Ошибка ЛП: ', s)
+        print('Критическая ошибка: ', s)

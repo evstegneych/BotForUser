@@ -9,9 +9,13 @@
     14234,
     14213,
     13849,
-    13871
+    13871,
+    18788,
+    18572
   ],
   "TriggerAddStickers": "!+",
+  "TriggerIgnore": "!игнор",
+  "IgnoreList": [],
   "TimeWait": 5,
   "TriggerDelete": "ой",
   "TriggerTranslate": "рас",
@@ -19,5 +23,6 @@
     "@все",
     "&#8300;"
   ],
-  "TriggerContest": "роз"
+  "TriggerContest": "роз",
+  "TimeOutDel": 5
 }
