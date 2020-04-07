@@ -11,11 +11,15 @@
     13849,
     13871,
     18788,
-    18572
+    18572,
+    6140
   ],
   "TriggerAddStickers": "!+",
   "TriggerIgnore": "!игнор",
-  "IgnoreList": [],
+  "IgnoreList": [
+    2000001175,
+    2000001176
+  ],
   "TimeWait": 5,
   "TriggerDelete": "ой",
   "TriggerTranslate": "рас",

@@ -32,17 +32,10 @@ class Settings:
             with open(self.filename, "w", encoding="utf-8") as file:
                 json.dump(self._data, file, ensure_ascii=False, indent=4)
 
-    def edit(self, _name, _value):
-        self._data[_name] = _value
-        setattr(self, _name, _value)
 
     def update(self):
         for k in self.__slots__[:-2]:
             self._data[k] = getattr(self, k)
-
-    @property
-    def get_data(self):
-        return str(self._data)
 
 
 setting = Settings("config.json")
@@ -316,11 +309,6 @@ while True:
                                 setting.update()
                                 setting.save()
                                 continue
-
-                            args: str = message.strip()
-                            if args.isdigit():
-                                # TODO Добавление стикера не через пересланное сообщение
-                                pass
                         elif message == setting.TriggerIgnore:
                             dialog_id = event.peer_id
                             if dialog_id in setting.IgnoreList:
