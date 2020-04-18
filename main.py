@@ -126,7 +126,7 @@ def ContestsControl():
                 _hours, _minutes, _seconds = convert_timedelta(t)
                 if not _minutes and _seconds:
                     _minutes = 1
-                check_time = t.total_seconds() <= 20
+                check_time = t.total_seconds() <= 30
                 if check_time:
                     _hours = 0
                     _minutes = 0
@@ -137,7 +137,7 @@ def ContestsControl():
                         break
                     else:
                         i += 1
-                if i >= 10:
+                if i >= 25 and not check_time:
                     MessageDelete(v["message_id"])
                     Contests[v["peer_id"]]["message_id"] = vk.messages.send(peer_id=v["peer_id"],
                                                                             message=ContestText2.format(
@@ -145,7 +145,8 @@ def ContestsControl():
                                                                                 v["trigger"],
                                                                                 GetNameUsers(v["users"])),
                                                                             random_id=random.randint(-1000000, 1000000),
-                                                                            forward_messages=v["message_id"])
+                                                                            forward_messages=v["message_id"],
+                                                                            disable_mentions=1)
                 else:
                     MessageEdit(v["message_id"],
                                 ContestText.format(
@@ -162,7 +163,7 @@ def ContestsControl():
         except Exception as error:
             print("Поток Конкурсов:", error)
         finally:
-            time.sleep(40)
+            time.sleep(140)
 
 
 run(ContestsControl)
