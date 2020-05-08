@@ -12,7 +12,7 @@ from vk_api.longpoll import VkLongPoll, VkEventType
 class Settings:
     __slots__ = ["Token", "TriggerStickers", "Answers",
                  "TimeWait", "TriggerDelete",
-                 "TriggerTranslate", "TriggerEveryone",
+                 "TriggerTranslate",
                  "TriggerContest", "TriggerAddStickers",
                  "TriggerIgnore", "IgnoreList",
                  "TimeOutDel", "filename", "_data"]
@@ -284,18 +284,6 @@ while True:
                                         MessageDelete(to_del)
                                     except Exception as s:
                                         print("Удаление сообщения:", s)
-
-                        elif message == setting.TriggerEveryone[0]:
-                            response = vk.messages.getChat(chat_id=event.chat_id)
-                            users = response['users']
-                            text = "@everyone "
-                            for x in users:
-                                if x < 0:
-                                    pass
-                                else:
-                                    text += f"[id{x}|{setting.TriggerEveryone[1]}] "  # &#8300;
-                            MessageEdit(event.message_id, text, event.peer_id)
-                            continue
 
                         elif message == setting.TriggerTranslate:
                             message_ = LastMyMessage.get(event.peer_id)
