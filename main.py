@@ -10,12 +10,12 @@ from vk_api.longpoll import VkLongPoll, VkEventType
 
 
 class Settings:
-    __slots__ = ["Token", "TriggerStickers", "Stickers",
+    __slots__ = ["Token", "TriggerStickers", "Answers",
                  "TimeWait", "TriggerDelete",
-                 "TriggerTranslate", "TriggerEveryone",
+                 "TriggerTranslate",
                  "TriggerContest", "TriggerAddStickers",
                  "TriggerIgnore", "IgnoreList",
-                 "TimeOutDel", "ContestWait", "filename", "_data"]
+                 "TimeOutDel", "filename", "_data"]
 
     def __init__(self, filename):
         self.filename = filename
@@ -126,7 +126,7 @@ def ContestsControl():
                 _hours, _minutes, _seconds = convert_timedelta(t)
                 if not _minutes and _seconds:
                     _minutes = 1
-                check_time = t.total_seconds() <= 20
+                check_time = t.total_seconds() <= 30
                 if check_time:
                     _hours = 0
                     _minutes = 0
@@ -137,7 +137,7 @@ def ContestsControl():
                         break
                     else:
                         i += 1
-                if i >= 10:
+                if i >= 25 and not check_time:
                     MessageDelete(v["message_id"])
                     Contests[v["peer_id"]]["message_id"] = vk.messages.send(peer_id=v["peer_id"],
                                                                             message=ContestText2.format(
@@ -145,24 +145,29 @@ def ContestsControl():
                                                                                 v["trigger"],
                                                                                 GetNameUsers(v["users"])),
                                                                             random_id=random.randint(-1000000, 1000000),
-                                                                            forward_messages=v["message_id"])
+                                                                            forward_messages=v["message_id"],
+                                                                            disable_mentions=1)
                 else:
-                    MessageEdit(v["message_id"],
-                                ContestText.format(
-                                    f"{_hours} ч. {_minutes} мин.",
-                                    v["trigger"],
-                                    GetNameUsers(v["users"])),
-                                v["peer_id"])
+                    message_id = vk.messages.send(peer_id=v["peer_id"],
+                                                  message=ContestText.format(
+                                                      f"{_hours} ч. {_minutes} мин.",
+                                                      v["trigger"],
+                                                      GetNameUsers(v["users"])),
+                                                  random_id=random.randint(-1000000, 1000000),
+                                                  forward_messages=v["message_id"],
+                                                  disable_mentions=1)
+                    Contests["message_id"] = message_id
                 if check_time:
+                    del Contests[key]
                     vk.messages.send(peer_id=v["peer_id"],
                                      message=ContestTextWin.format(GetNameUsers([random.choice(v["users"])])),
                                      random_id=random.randint(-1000000, 1000000),
                                      forward_messages=v["message_id"])
-                    del Contests[key]
+                    MessageDelete(v["message_id"])
         except Exception as error:
             print("Поток Конкурсов:", error)
         finally:
-            time.sleep(40)
+            time.sleep(140)
 
 
 run(ContestsControl)
@@ -170,22 +175,23 @@ print("Бот запущен")
 while True:
     try:
         for event in longpoll.listen():
-            try:
-                if event.type == VkEventType.MESSAGE_NEW:
-                    if not event.text:
-                        continue
-                    message = event.message.lower()
+            if event.type == VkEventType.MESSAGE_NEW:
+                if not event.text:
+                    continue
+                message = event.message.lower()
 
-                    if event.from_chat:
-                        contest = None
-                        for (peer_id, value) in Contests.items():
-                            if message == value["trigger"].lower() and value["peer_id"] == event.peer_id:
-                                contest = value
-                                break
-                        if contest is not None:
+                if event.from_chat:
+                    contest = None
+                    for (peer_id, value) in Contests.items():
+                        if message == value["trigger"].lower() and value["peer_id"] == event.peer_id:
+                            contest = value
+                            break
+                    if contest is not None:
+                        if event.user_id not in contest["leave_users"]:
                             if event.user_id not in contest["users"]:
                                 Contests[contest["peer_id"]]["users"].append(event.user_id)
                             else:
+                                Contests[contest["peer_id"]]["leave_users"].append(event.user_id)
                                 Contests[contest["peer_id"]]["users"].remove(event.user_id)
                             hours, minutes, seconds = convert_timedelta(contest["time"] - datetime.datetime.now())
                             MessageEdit(contest["message_id"],
@@ -195,169 +201,157 @@ while True:
                                             GetNameUsers(contest["users"])),
                                         contest["peer_id"])
 
-                        find = CheckMarkUser(message)
-                        if (
-                                find
-                                and LastSend is not None
-                                and event.user_id != user_id
-                                and event.peer_id not in setting.IgnoreList
-                        ):
+                    find = CheckMarkUser(message)
+                    if (
+                            find
+                            and LastSend is not None
+                            and event.user_id != user_id
+                            and event.peer_id not in setting.IgnoreList
+                    ):
 
-                            if datetime.datetime.now() >= LastSend:
-                                try:
-                                    time.sleep(.3)
-                                    vk.messages.send(peer_id=event.peer_id, sticker_id=random.choice(setting.Stickers),
+                        if datetime.datetime.now() >= LastSend:
+                            choice_msg = random.choice(setting.Answers)
+                            try:
+                                time.sleep(.3)
+                                if isinstance(choice_msg, int):
+                                    vk.messages.send(peer_id=event.peer_id, sticker_id=choice_msg,
                                                      random_id=random.randint(-1000000, 1000000))
+                                else:
+                                    vk.messages.send(peer_id=event.peer_id, message=choice_msg,
+                                                     random_id=random.randint(-1000000, 1000000))
+                            except Exception as s:
+                                print("Отправка сообещния на упоминание:", s)
+                            finally:
+                                LastSend = datetime.datetime.now() + datetime.timedelta(minutes=setting.TimeWait)
+                        else:
+                            print("Осталось до отправки стикера:", LastSend - datetime.datetime.now())
+
+                    if event.user_id == user_id:
+
+                        if message.startswith(setting.TriggerContest + " "):
+                            if Contests.get(event.peer_id) is not None:
+                                continue
+                            message_ = event.text[len(setting.TriggerContest) + 1:]
+                            args = message_.split()
+                            if len(args) >= 2:
+                                time_ = args[0]
+                                if not time_.isdigit():
+                                    continue
+                                time_ = datetime.timedelta(minutes=int(time_))
+                                hours, minutes, seconds = convert_timedelta(time_)
+                                trigger = args[1:]
+                                text = ContestText.format(f"{hours} ч. {minutes} мин.",
+                                                          " ".join(trigger), "")
+                                MessageEdit(event.message_id, text, event.peer_id)
+                                Contests.update(
+                                    {
+                                        event.peer_id:
+                                            {
+                                                "peer_id": event.peer_id,
+                                                "users": [],
+                                                "message_id": event.message_id,
+                                                "trigger": " ".join(trigger),
+                                                "time": datetime.datetime.now() + time_,
+                                                "leave_users": []
+                                            }
+                                    }
+                                )
+
+                            del message_, args
+
+                        elif message.startswith(setting.TriggerDelete):
+                            message_ = message.replace(setting.TriggerDelete, '')
+
+                            if len(message_) is 0:
+                                message_ = str(abs(len(message_) + 1))
+                            if message_.isdigit():
+                                try:
+                                    response = vk.messages.getHistory(peer_id=event.peer_id)
                                 except Exception as s:
                                     print(s)
-                                finally:
-                                    LastSend = datetime.datetime.now() + datetime.timedelta(minutes=setting.TimeWait)
-                            else:
-                                print("Осталось до отправки стикера:", LastSend - datetime.datetime.now())
-
-                        if event.user_id == user_id:
-
-                            if message.startswith(setting.TriggerContest + " "):
-                                if Contests.get(event.peer_id) is not None:
                                     continue
-                                message_ = event.text[len(setting.TriggerContest) + 1:]
-                                args = message_.split()
-                                if len(args) >= 2:
-                                    time_ = args[0]
-                                    if not time_.isdigit():
-                                        continue
-                                    time_ = datetime.timedelta(minutes=int(time_))
-                                    hours, minutes, seconds = convert_timedelta(time_)
-                                    trigger = args[1:]
-                                    text = ContestText.format(f"{hours} ч. {minutes} мин.",
-                                                              " ".join(trigger), "")
-                                    MessageEdit(event.message_id, text, event.peer_id)
-                                    Contests.update(
-                                        {
-                                            event.peer_id:
-                                                {
-                                                    "peer_id": event.peer_id,
-                                                    "users": [],
-                                                    "message_id": event.message_id,
-                                                    "trigger": " ".join(trigger),
-                                                    "time": datetime.datetime.now() + time_
-                                                }
-                                        }
-                                    )
-
-                                del message_, args
-
-                            elif message.startswith(setting.TriggerDelete):
-                                message_ = message.replace(setting.TriggerDelete, '')
-
-                                if len(message_) is 0:
-                                    message_ = str(abs(len(message_) + 1))
-                                if message_.isdigit():
+                                count = 0
+                                count_max = int(message_) + 1
+                                to_del = []
+                                for x in response.get('items', []):
+                                    if x['from_id'] == user_id:
+                                        to_del.append(x['id'])
+                                        count += 1
+                                    if count >= count_max:
+                                        break
+                                if len(to_del) != 0:
                                     try:
-                                        response = vk.messages.getHistory(peer_id=event.peer_id)
+                                        MessageDelete(to_del)
                                     except Exception as s:
-                                        print(s)
-                                        continue
-                                    count = 0
-                                    count_max = int(message_) + 1
-                                    to_del = []
-                                    for x in response.get('items', []):
-                                        if x['from_id'] == user_id:
-                                            to_del.append(x['id'])
-                                            count += 1
-                                        if count >= count_max:
-                                            break
-                                    if len(to_del) != 0:
-                                        try:
-                                            MessageDelete(to_del)
-                                        except Exception as s:
-                                            print("Удаление сообщения:", s)
+                                        print("Удаление сообщения:", s)
 
-                            elif message == setting.TriggerEveryone[0]:
-                                response = vk.messages.getChat(chat_id=event.chat_id)
-                                users = response['users']
-                                text = "@everyone "
-                                for x in users:
-                                    if x < 0:
+                        elif message == setting.TriggerTranslate:
+                            message_ = LastMyMessage.get(event.peer_id)
+                            if message_ is not None:
+                                response = vk.messages.getById(message_ids=message_)
+                                msg = response.get("items", [{}])[0]
+                                text = msg.get("text")
+                                if text is not None:
+                                    eng_chars = "~!@#%^&qwertyuiop[]asdfghjkl;'zxcvbnm,.QWERTYUIOP{}ASDFGHJKL:\"|ZXCVBNM<>"
+                                    rus_chars = "ё!\"№%:?йцукенгшщзхъфывапролджэячсмитьбюЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭ/ЯЧСМИТЬБЮ"
+                                    trans_table = dict(zip(eng_chars + rus_chars, rus_chars + eng_chars))
+                                    swapped_message = ""
+                                    for c in text:
+                                        swapped_message += trans_table.get(c, c)
+                                    try:
+                                        MessageEdit(message_, swapped_message, event.peer_id)
+                                        MessageDelete(event.message_id)
+                                    finally:
                                         pass
+                        elif message.startswith(setting.TriggerAddStickers):
+                            sticker_id = None
+                            response = vk.messages.getById(message_ids=event.message_id)["items"]
+                            if response:
+                                response = response[0]
+                                get_sticker = response.get("reply_message")
+                                if get_sticker is None:
+                                    get_sticker = response.get("fwd_messages")
+                                    if get_sticker:
+                                        get_sticker = get_sticker[0]
                                     else:
-                                        text += f"[id{x}|{setting.TriggerEveryone[1]}] "  # &#8300;
-                                MessageEdit(event.message_id, text, event.peer_id)
-                                continue
+                                        get_sticker = None
+                                if get_sticker is not None:
+                                    attach = get_sticker.get("attachments")
+                                    if attach:
+                                        attach = attach[0].get("sticker")
+                                        if attach is not None:
+                                            sticker_id = attach["sticker_id"]
 
-                            elif message == setting.TriggerTranslate:
-                                message_ = LastMyMessage.get(event.peer_id)
-                                if message_ is not None:
-                                    response = vk.messages.getById(message_ids=message_)
-                                    msg = response.get("items", [{}])[0]
-                                    text = msg.get("text")
-                                    if text is not None:
-                                        eng_chars = "~!@#%^&qwertyuiop[]asdfghjkl;'zxcvbnm,.QWERTYUIOP{}ASDFGHJKL:\"|ZXCVBNM<>"
-                                        rus_chars = "ё!\"№%:?йцукенгшщзхъфывапролджэячсмитьбюЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭ/ЯЧСМИТЬБЮ"
-                                        trans_table = dict(zip(eng_chars + rus_chars, rus_chars + eng_chars))
-                                        swapped_message = ""
-                                        for c in text:
-                                            swapped_message += trans_table.get(c, c)
-                                        try:
-                                            MessageEdit(message_, swapped_message, event.peer_id)
-                                            MessageDelete(event.message_id)
-                                        finally:
-                                            pass
-                            elif message.startswith(setting.TriggerAddStickers):
-                                sticker_id = None
-                                response = vk.messages.getById(message_ids=event.message_id)["items"]
-                                if response:
-                                    response = response[0]
-                                    get_sticker = response.get("reply_message")
-                                    if get_sticker is None:
-                                        get_sticker = response.get("fwd_messages")
-                                        if get_sticker:
-                                            get_sticker = get_sticker[0]
-                                        else:
-                                            get_sticker = None
-                                    if get_sticker is not None:
-                                        attach = get_sticker.get("attachments")
-                                        if attach:
-                                            attach = attach[0].get("sticker")
-                                            if attach is not None:
-                                                sticker_id = attach["sticker_id"]
-
-                                if sticker_id is not None:
-                                    if sticker_id in setting.Stickers:
-                                        setting.Stickers.remove(sticker_id)
-                                        MessageEdit(event.message_id, f"Стикер <<{sticker_id}>> удален.", event.peer_id)
-                                    else:
-                                        setting.Stickers.append(sticker_id)
-                                        MessageEdit(event.message_id, f"Стикер <<{sticker_id}>> добавлен.",
-                                                    event.peer_id)
-                                    run(MessageDelete, arg=[event.message_id], timeout=setting.TimeOutDel)
-                                    setting.update()
-                                    setting.save()
-                                    continue
-                            elif message == setting.TriggerIgnore:
-                                dialog_id = event.peer_id
-                                if dialog_id in setting.IgnoreList:
-                                    setting.IgnoreList.remove(dialog_id)
-                                    MessageEdit(event.message_id, f"Диалог <<{dialog_id}>> удален из игнор листа.",
-                                                dialog_id)
+                            if sticker_id is not None:
+                                if sticker_id in setting.Answers:
+                                    setting.Answers.remove(sticker_id)
+                                    MessageEdit(event.message_id, f"Стикер <<{sticker_id}>> удален.", event.peer_id)
                                 else:
-                                    setting.IgnoreList.append(event.peer_id)
-                                    MessageEdit(event.message_id, f"Диалог <<{dialog_id}>> добавлен в игнор лист.",
-                                                dialog_id)
+                                    setting.Answers.append(sticker_id)
+                                    MessageEdit(event.message_id, f"Стикер <<{sticker_id}>> добавлен.",
+                                                event.peer_id)
                                 run(MessageDelete, arg=[event.message_id], timeout=setting.TimeOutDel)
                                 setting.update()
                                 setting.save()
                                 continue
-
+                        elif message == setting.TriggerIgnore:
+                            dialog_id = event.peer_id
+                            if dialog_id in setting.IgnoreList:
+                                setting.IgnoreList.remove(dialog_id)
+                                MessageEdit(event.message_id, f"Диалог <<{dialog_id}>> удален из игнор листа.",
+                                            dialog_id)
                             else:
-                                LastMyMessage.update({event.peer_id: event.message_id})
+                                setting.IgnoreList.append(event.peer_id)
+                                MessageEdit(event.message_id, f"Диалог <<{dialog_id}>> добавлен в игнор лист.",
+                                            dialog_id)
+                            run(MessageDelete, arg=[event.message_id], timeout=setting.TimeOutDel)
+                            setting.update()
+                            setting.save()
+                            continue
 
-            except Exception as s:
-                print("-----------------")
-                print("Ошибка выполнения:", s)
-                print(event.raw)
-                print("Отправьте это разработчику!")
-                print("-----------------")
+                        else:
+                            LastMyMessage.update({event.peer_id: event.message_id})
 
     except Exception as s:
         print('Критическая ошибка: ', s)
+        raise

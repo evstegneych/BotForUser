@@ -4,7 +4,10 @@
     "чачлык",
     "евстегней"
   ],
-  "Stickers": [
+  "Answers": [
+    "Я что ли",
+    "ну Я",
+    "Саги вдлыьаыв",
     18791,
     14234,
     14213,
@@ -18,15 +21,12 @@
   "TriggerIgnore": "!игнор",
   "IgnoreList": [
     2000001175,
-    2000001176
+    2000001176,
+    2000001037
   ],
-  "TimeWait": 5,
+  "TimeWait": 15,
   "TriggerDelete": "ой",
   "TriggerTranslate": "рас",
-  "TriggerEveryone": [
-    "@все",
-    "&#8300;"
-  ],
   "TriggerContest": "роз",
   "TimeOutDel": 5
 }
