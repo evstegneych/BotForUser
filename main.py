@@ -15,7 +15,7 @@ class Settings:
                  "TriggerTranslate", "TriggerEveryone",
                  "TriggerContest", "TriggerAddStickers",
                  "TriggerIgnore", "IgnoreList",
-                 "TimeOutDel", "ContestWait", "filename", "_data"]
+                 "TimeOutDel", "filename", "_data"]
 
     def __init__(self, filename):
         self.filename = filename
@@ -155,11 +155,12 @@ def ContestsControl():
                                     GetNameUsers(v["users"])),
                                 v["peer_id"])
                 if check_time:
+                    del Contests[key]
                     vk.messages.send(peer_id=v["peer_id"],
                                      message=ContestTextWin.format(GetNameUsers([random.choice(v["users"])])),
                                      random_id=random.randint(-1000000, 1000000),
                                      forward_messages=v["message_id"])
-                    del Contests[key]
+                    MessageDelete(v["message_id"])
         except Exception as error:
             print("Поток Конкурсов:", error)
         finally:
@@ -359,3 +360,4 @@ while True:
 
     except Exception as s:
         print('Критическая ошибка: ', s)
+        raise
