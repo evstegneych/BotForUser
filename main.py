@@ -148,12 +148,15 @@ def ContestsControl():
                                                                             forward_messages=v["message_id"],
                                                                             disable_mentions=1)
                 else:
-                    MessageEdit(v["message_id"],
-                                ContestText.format(
-                                    f"{_hours} ч. {_minutes} мин.",
-                                    v["trigger"],
-                                    GetNameUsers(v["users"])),
-                                v["peer_id"])
+                    message_id = vk.messages.send(peer_id=v["peer_id"],
+                                                  message=ContestText.format(
+                                                      f"{_hours} ч. {_minutes} мин.",
+                                                      v["trigger"],
+                                                      GetNameUsers(v["users"])),
+                                                  random_id=random.randint(-1000000, 1000000),
+                                                  forward_messages=v["message_id"],
+                                                  disable_mentions=1)
+                    Contests["message_id"] = message_id
                 if check_time:
                     del Contests[key]
                     vk.messages.send(peer_id=v["peer_id"],
@@ -184,17 +187,19 @@ while True:
                             contest = value
                             break
                     if contest is not None:
-                        if event.user_id not in contest["users"]:
-                            Contests[contest["peer_id"]]["users"].append(event.user_id)
-                        else:
-                            Contests[contest["peer_id"]]["users"].remove(event.user_id)
-                        hours, minutes, seconds = convert_timedelta(contest["time"] - datetime.datetime.now())
-                        MessageEdit(contest["message_id"],
-                                    ContestText.format(
-                                        f"{hours} ч. {minutes} мин.",
-                                        contest["trigger"],
-                                        GetNameUsers(contest["users"])),
-                                    contest["peer_id"])
+                        if event.user_id not in contest["leave_users"]:
+                            if event.user_id not in contest["users"]:
+                                Contests[contest["peer_id"]]["users"].append(event.user_id)
+                            else:
+                                Contests[contest["peer_id"]]["leave_users"].append(event.user_id)
+                                Contests[contest["peer_id"]]["users"].remove(event.user_id)
+                            hours, minutes, seconds = convert_timedelta(contest["time"] - datetime.datetime.now())
+                            MessageEdit(contest["message_id"],
+                                        ContestText.format(
+                                            f"{hours} ч. {minutes} мин.",
+                                            contest["trigger"],
+                                            GetNameUsers(contest["users"])),
+                                        contest["peer_id"])
 
                     find = CheckMarkUser(message)
                     if (
@@ -246,7 +251,8 @@ while True:
                                                 "users": [],
                                                 "message_id": event.message_id,
                                                 "trigger": " ".join(trigger),
-                                                "time": datetime.datetime.now() + time_
+                                                "time": datetime.datetime.now() + time_,
+                                                "leave_users": []
                                             }
                                     }
                                 )
