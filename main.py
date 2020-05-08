@@ -10,7 +10,7 @@ from vk_api.longpoll import VkLongPoll, VkEventType
 
 
 class Settings:
-    __slots__ = ["Token", "TriggerStickers", "Stickers",
+    __slots__ = ["Token", "TriggerStickers", "Answers",
                  "TimeWait", "TriggerDelete",
                  "TriggerTranslate", "TriggerEveryone",
                  "TriggerContest", "TriggerAddStickers",
@@ -204,12 +204,17 @@ while True:
                     ):
 
                         if datetime.datetime.now() >= LastSend:
+                            choice_msg = random.choice(setting.Answers)
                             try:
                                 time.sleep(.3)
-                                vk.messages.send(peer_id=event.peer_id, sticker_id=random.choice(setting.Stickers),
-                                                 random_id=random.randint(-1000000, 1000000))
+                                if isinstance(choice_msg, int):
+                                    vk.messages.send(peer_id=event.peer_id, sticker_id=choice_msg,
+                                                     random_id=random.randint(-1000000, 1000000))
+                                else:
+                                    vk.messages.send(peer_id=event.peer_id, message=choice_msg,
+                                                     random_id=random.randint(-1000000, 1000000))
                             except Exception as s:
-                                print(s)
+                                print("Отправка сообещния на упоминание:", s)
                             finally:
                                 LastSend = datetime.datetime.now() + datetime.timedelta(minutes=setting.TimeWait)
                         else:
@@ -323,11 +328,11 @@ while True:
                                             sticker_id = attach["sticker_id"]
 
                             if sticker_id is not None:
-                                if sticker_id in setting.Stickers:
-                                    setting.Stickers.remove(sticker_id)
+                                if sticker_id in setting.Answers:
+                                    setting.Answers.remove(sticker_id)
                                     MessageEdit(event.message_id, f"Стикер <<{sticker_id}>> удален.", event.peer_id)
                                 else:
-                                    setting.Stickers.append(sticker_id)
+                                    setting.Answers.append(sticker_id)
                                     MessageEdit(event.message_id, f"Стикер <<{sticker_id}>> добавлен.",
                                                 event.peer_id)
                                 run(MessageDelete, arg=[event.message_id], timeout=setting.TimeOutDel)
