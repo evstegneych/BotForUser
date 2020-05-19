@@ -137,7 +137,7 @@ def ContestsControl():
                         break
                     else:
                         i += 1
-                if i >= 25 and not check_time:
+                if i >= 15 and not check_time:
                     MessageDelete(v["message_id"])
                     Contests[v["peer_id"]]["message_id"] = vk.messages.send(peer_id=v["peer_id"],
                                                                             message=ContestText2.format(
@@ -145,22 +145,18 @@ def ContestsControl():
                                                                                 v["trigger"],
                                                                                 GetNameUsers(v["users"])),
                                                                             random_id=random.randint(-1000000, 1000000),
-                                                                            forward_messages=v["message_id"],
                                                                             disable_mentions=1)
                 else:
-                    message_id = vk.messages.send(peer_id=v["peer_id"],
-                                                  message=ContestText.format(
-                                                      f"{_hours} ч. {_minutes} мин.",
-                                                      v["trigger"],
-                                                      GetNameUsers(v["users"])),
-                                                  random_id=random.randint(-1000000, 1000000),
-                                                  forward_messages=v["message_id"],
-                                                  disable_mentions=1)
-                    Contests["message_id"] = message_id
+                    MessageEdit(v["message_id"],
+                                ContestText.format(
+                                    f"{_hours} ч. {_minutes} мин.",
+                                    v["trigger"],
+                                    GetNameUsers(v["users"])), v["peer_id"])
                 if check_time:
                     del Contests[key]
+                    winner = random.choice(v["users"] if len(v["users"]) else [0])
                     vk.messages.send(peer_id=v["peer_id"],
-                                     message=ContestTextWin.format(GetNameUsers([random.choice(v["users"])])),
+                                     message=ContestTextWin.format(GetNameUsers([winner])),
                                      random_id=random.randint(-1000000, 1000000),
                                      forward_messages=v["message_id"])
                     MessageDelete(v["message_id"])
@@ -183,6 +179,8 @@ while True:
                 if event.from_chat:
                     contest = None
                     for (peer_id, value) in Contests.items():
+                        print([peer_id, value])
+
                         if message == value["trigger"].lower() and value["peer_id"] == event.peer_id:
                             contest = value
                             break
@@ -193,10 +191,17 @@ while True:
                             else:
                                 Contests[contest["peer_id"]]["leave_users"].append(event.user_id)
                                 Contests[contest["peer_id"]]["users"].remove(event.user_id)
-                            hours, minutes, seconds = convert_timedelta(contest["time"] - datetime.datetime.now())
+                            t_lp = contest["time"] - datetime.datetime.now()
+                            _hours_lp, _minutes_lp, _seconds_lp = convert_timedelta(t_lp)
+                            if not _minutes_lp and _seconds_lp:
+                                _minutes_lp = 1
+                            check_time_lp = t_lp.total_seconds() <= 30
+                            if check_time_lp:
+                                _hours_lp = 0
+                                _minutes_lp = 0
                             MessageEdit(contest["message_id"],
                                         ContestText.format(
-                                            f"{hours} ч. {minutes} мин.",
+                                            f"{_hours_lp} ч. {_minutes_lp} мин.",
                                             contest["trigger"],
                                             GetNameUsers(contest["users"])),
                                         contest["peer_id"])
