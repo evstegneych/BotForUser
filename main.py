@@ -143,7 +143,7 @@ def ContestsControl():
                                                                             message=ContestText2.format(
                                                                                 f"{_hours} ч. {_minutes} мин.",
                                                                                 v["trigger"],
-                                                                                GetNameUsers(v["users"])),
+                                                                                GetNameUsers(Contests[key]["users"])),
                                                                             random_id=random.randint(-1000000, 1000000),
                                                                             disable_mentions=1)
                 else:
@@ -151,10 +151,10 @@ def ContestsControl():
                                 ContestText.format(
                                     f"{_hours} ч. {_minutes} мин.",
                                     v["trigger"],
-                                    GetNameUsers(v["users"])), v["peer_id"])
+                                    GetNameUsers(Contests[key]["users"])), v["peer_id"])
                 if check_time:
                     del Contests[key]
-                    winner = random.choice(v["users"] if len(v["users"]) else [0])
+                    winner = random.choice(v["users"] if len(v["users"]) else 0)
                     vk.messages.send(peer_id=v["peer_id"],
                                      message=ContestTextWin.format(GetNameUsers([winner])),
                                      random_id=random.randint(-1000000, 1000000),
@@ -179,8 +179,6 @@ while True:
                 if event.from_chat:
                     contest = None
                     for (peer_id, value) in Contests.items():
-                        print([peer_id, value])
-
                         if message == value["trigger"].lower() and value["peer_id"] == event.peer_id:
                             contest = value
                             break
@@ -359,4 +357,3 @@ while True:
 
     except Exception as s:
         print('Критическая ошибка: ', s)
-        raise
